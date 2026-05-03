@@ -3,11 +3,32 @@
 fishinglog-agent — AI-powered commercial fishing intelligence
 Track catches, weather, tides, and market prices. Find patterns humans miss.
 Built by a commercial fisherman.
+
+Now uses domain-agent-base for PLATO integration, health checks, and reporting.
 """
 
-import json, time, random, urllib.request
+import json, time, random
 from typing import List, Dict, Optional
 from dataclasses import dataclass
+
+try:
+    from domain_agent_base import DomainAgent
+except ImportError:
+    # Fallback if domain-agent-base not installed
+    class DomainAgent:
+        domain = "base"
+        plato_url = "http://147.224.38.131:8847"
+        def __init__(self):
+            self.tiles_submitted = []
+            self.errors = []
+            self.start_time = time.time()
+        def submit_tile(self, question, answer, room=None):
+            self.tiles_submitted.append({"q": question, "a": answer})
+            return True
+        def get_stats(self):
+            return {"domain": self.domain, "tiles": len(self.tiles_submitted)}
+        def run(self):
+            raise NotImplementedError
 
 @dataclass
 class Catch:
@@ -15,13 +36,17 @@ class Catch:
     weight_kg: float
     location: str
     timestamp: float
-    conditions: Dict  # weather, tide, temp
+    conditions: Dict
     price_per_kg: Optional[float] = None
 
-class FishingLogAgent:
-    def __init__(self, agent_name: str = "fishinglog-agent", plato_url: str = "http://147.224.38.131:8847"):
-        self.name = agent_name
-        self.plato_url = plato_url.rstrip("/")
+class FishingLogAgent(DomainAgent):
+    """Fishing intelligence agent — now with DomainAgent base class."""
+    
+    domain = "fishing"
+    version = "0.2.0"
+    
+    def __init__(self):
+        super().__init__()
         self.catches: List[Catch] = []
         self.species_seen: set = set()
     
@@ -40,8 +65,8 @@ class FishingLogAgent:
         self.catches.append(catch)
         self.species_seen.add(species)
         
-        # Submit to PLATO
-        self._submit_tile(
+        # Submit to PLATO via base class
+        self.submit_tile(
             question=f"What was caught at {location} under {weather} conditions?",
             answer=f"{species}: {weight_kg}kg at {temp_c}°C, tide={tide}"
         )
@@ -60,97 +85,78 @@ class FishingLogAgent:
         # Best conditions per species
         best_conditions = {}
         for c in self.catches:
-            sp = c.species
-            if sp not in best_conditions:
-                best_conditions[sp] = {"catches": [], "total_kg": 0}
-            best_conditions[sp]["catches"].append(c)
-            best_conditions[sp]["total_kg"] += c.weight_kg
+            if c.species not in best_conditions:
+                best_conditions[c.species] = {"catches": 0, "total_weight": 0}
+            best_conditions[c.species]["catches"] += 1
+            best_conditions[c.species]["total_weight"] += c.weight_kg
         
-        # Location performance
-        loc_perf = {}
+        # Average price trend
+        price_trend = []
         for c in self.catches:
-            loc = c.location
-            if loc not in loc_perf:
-                loc_perf[loc] = {"catches": 0, "total_kg": 0}
-            loc_perf[loc]["catches"] += 1
-            loc_perf[loc]["total_kg"] += c.weight_kg
+            if c.price_per_kg:
+                price_trend.append({"species": c.species, "price": c.price_per_kg, "time": c.timestamp})
         
         return {
             "total_catches": len(self.catches),
-            "species_diversity": len(self.species_seen),
+            "species_seen": list(self.species_seen),
             "species_frequency": species_count,
-            "best_conditions": {sp: {"avg_kg": data["total_kg"]/len(data["catches"])} 
-                                for sp, data in best_conditions.items()},
-            "location_performance": loc_perf,
+            "best_conditions": best_conditions,
+            "price_trend": price_trend[-10:]  # Last 10
         }
     
-    def predict_best_conditions(self, species: str) -> Dict:
-        """Predict best weather/tide for a species based on history."""
-        relevant = [c for c in self.catches if c.species == species]
-        if len(relevant) < 3:
-            return {"error": f"Need 3+ catches of {species} for prediction. Have {len(relevant)}."}
+    def predict_best_spot(self, species: str) -> Dict:
+        """Predict best fishing spot for a species based on historical data."""
+        matches = [c for c in self.catches if c.species == species]
+        if not matches:
+            return {"error": f"No data for {species}"}
         
-        # Simple heuristic: most common conditions in top 50% by weight
-        relevant.sort(key=lambda c: c.weight_kg, reverse=True)
-        top_half = relevant[:len(relevant)//2]
+        # Simple: return location with highest average weight
+        location_scores = {}
+        for c in matches:
+            if c.location not in location_scores:
+                location_scores[c.location] = {"total_weight": 0, "count": 0}
+            location_scores[c.location]["total_weight"] += c.weight_kg
+            location_scores[c.location]["count"] += 1
         
-        weather_freq = {}
-        tide_freq = {}
-        for c in top_half:
-            w = c.conditions.get("weather", "unknown")
-            t = c.conditions.get("tide", "unknown")
-            weather_freq[w] = weather_freq.get(w, 0) + 1
-            tide_freq[t] = tide_freq.get(t, 0) + 1
-        
-        best_weather = max(weather_freq, key=weather_freq.get) if weather_freq else "unknown"
-        best_tide = max(tide_freq, key=tide_freq.get) if tide_freq else "unknown"
+        best = max(location_scores.items(), key=lambda x: x[1]["total_weight"] / x[1]["count"])
         
         return {
             "species": species,
-            "recommend_weather": best_weather,
-            "recommend_tide": best_tide,
-            "confidence": len(top_half) / len(relevant),
-            "avg_weight_top": sum(c.weight_kg for c in top_half) / len(top_half)
+            "best_location": best[0],
+            "avg_weight": round(best[1]["total_weight"] / best[1]["count"], 2),
+            "confidence": min(best[1]["count"] / 10, 1.0)  # More catches = higher confidence
         }
     
-    def _submit_tile(self, question: str, answer: str):
-        """Submit a tile to PLATO gate."""
-        payload = json.dumps({
-            "question": question,
-            "answer": answer,
-            "agent": self.name,
-            "room": "fishinglog"
-        }).encode()
-        try:
-            req = urllib.request.Request(f"{self.plato_url}/submit", data=payload,
-                                         headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=5) as r:
-                pass
-        except Exception:
-            pass  # PLATO optional
+    def run(self):
+        """Main agent loop — log demo catches and submit insights."""
+        print(f"FishingLogAgent v{self.version} starting...")
+        
+        # Log some demo catches
+        self.log_catch("Tuna", 15.2, "GPS:42.3,-71.0", "sunny", "incoming", 18.5, 12.50)
+        self.log_catch("Cod", 8.7, "GPS:42.1,-70.8", "cloudy", "slack", 16.0, 8.25)
+        self.log_catch("Tuna", 22.1, "GPS:42.3,-71.0", "sunny", "incoming", 19.0, 14.00)
+        
+        # Submit pattern insights
+        patterns = self.get_patterns()
+        self.submit_tile(
+            "What patterns emerge from fishing data?",
+            json.dumps(patterns, indent=2, default=str)
+        )
+        
+        # Submit prediction
+        prediction = self.predict_best_spot("Tuna")
+        self.submit_tile(
+            "Where is the best spot for Tuna?",
+            json.dumps(prediction, indent=2, default=str)
+        )
+        
+        print(f"Run complete. {len(self.catches)} catches logged, {len(self.tiles_submitted)} tiles submitted")
 
-def demo():
+def main():
     agent = FishingLogAgent()
-    
-    # Log some catches
-    agent.log_catch("Salmon", 12.5, "Point A", "cloudy", "incoming", 14.2, 8.50)
-    agent.log_catch("Tuna", 45.0, "Point B", "sunny", "slack", 22.0, 15.00)
-    agent.log_catch("Salmon", 18.3, "Point A", "cloudy", "incoming", 13.8, 8.50)
-    agent.log_catch("Tuna", 38.0, "Point B", "sunny", "slack", 21.5, 15.00)
-    agent.log_catch("Cod", 5.2, "Point C", "rainy", "outgoing", 11.0, 6.00)
-    agent.log_catch("Salmon", 15.0, "Point A", "cloudy", "incoming", 14.0, 8.50)
-    
-    print("=== Fishing Log Patterns ===")
-    patterns = agent.get_patterns()
-    print(f"Total catches: {patterns['total_catches']}")
-    print(f"Species seen: {patterns['species_diversity']}")
-    print(f"Frequency: {patterns['species_frequency']}")
-    print(f"\nLocation performance: {patterns['location_performance']}")
-    
-    print("\n=== Prediction: Best conditions for Salmon ===")
-    pred = agent.predict_best_conditions("Salmon")
-    print(f"Recommend: {pred.get('recommend_weather')} weather, {pred.get('recommend_tide')} tide")
-    print(f"Confidence: {pred.get('confidence', 0):.1%}")
+    agent.run()
+    print(f"\nStats: {json.dumps(agent.get_stats(), indent=2)}")
+    print(f"\nHealth: {json.dumps(agent.health_check(), indent=2)}")
 
 if __name__ == "__main__":
-    demo()
+    main()
