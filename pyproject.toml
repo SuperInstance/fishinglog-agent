@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fishinglog-agent"
-version = "0.2.0"
+version = "0.2.1"
 description = "Captain's Mate for fishinglog.ai - PLATO-based fishing log agent"
 readme = "README.md"
 license = "MIT"
@@ -25,7 +25,7 @@ classifiers = [
 
 dependencies = [
     "requests>=2.31.0",
-    "domain-agent-base @ git+https://github.com/SuperInstance/domain-agent-base.git",
+    "fleet-agent>=0.2.0",
 ]
 
 [project.optional-dependencies]

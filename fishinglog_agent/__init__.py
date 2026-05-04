@@ -19,7 +19,7 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, asdict
 from urllib.parse import urljoin
 
-__version__ = "0.1.0"
+__version__ = "0.2.1"
 
 # Default PLATO endpoint
 DEFAULT_PLATO_URL = "http://localhost:8847"
