@@ -1,60 +1,57 @@
-# PLATO Fishing Log Agent - Captain's Mate for fishinglog.ai
+# Fishing Log Agent — Captain's Mate
 
-A git-agent pattern for fishing logs. Every fishing session is a committed tile to PLATO.
+> PLATO-enabled fishing log agent. Logs sessions, detects hot spots, queries history.
 
-## Features
-
-- **Sonar data logging** → writes functional tiles to PLATO
-- **Natural language queries** → "where were tuna last Tuesday?" → answer from PLATO
-- **Session tracking** → each fishing trip is a committed tile with location, depth, species, catch
-- **Vessel accumulation** → learns from past sessions over time
-
-## Architecture
-
-- **PLATO room**: `fishinglog-ai` — stores all fishing tiles
-- **Tile schema**: timestamp, latitude, longitude, depth_meters, species, catch_count, session_id, notes
-- **Agent pattern**: git-agent writes tiles, reads tiles to answer questions
-
-## Quick Start
+## Installation
 
 ```bash
 pip install fishinglog-agent
 ```
 
-### Log a fishing session
+## Usage
 
 ```python
 from fishinglog_agent import FishingLogAgent
 
 agent = FishingLogAgent()
+
+# Log a fishing session
 agent.log_session(
     latitude=41.5,
     longitude=-71.3,
     depth_meters=45,
     species="tuna",
     catch_count=12,
-    notes="Good catch near the shipping lanes"
+    notes="Good action on the tide change"
 )
+
+# Query recent sessions
+recent = agent.get_recent_sessions(limit=10)
+for session in recent:
+    print(f"{session['species']}: {session['catch_count']} at {session['latitude']}N")
+
+# Detect hot spots using H1 emergence detection
+hot_spots = agent.detect_hot_spots(species="tuna")
+for spot in hot_spots:
+    print(f"Hot spot at {spot['lat']}, {spot['lon']} (score: {spot['score']})")
 ```
 
-### Query past catches
+## Features
 
-```python
-# Where were tuna last Tuesday?
-results = agent.query(species="tuna", days_back=7)
+- **PLATO integration** — sessions stored as tiles in `fishinglog-ai` room
+- **H1 emergence detection** — fleet_math EmergenceDetector finds hot spots
+- **Query by species/location/time** — flexible historical queries
+- **Voice-ready** — compatible with PLATO Voice interface
 
-# What species at this location?
-results = agent.query(latitude=41.5, longitude=-71.3, radius_km=5)
-```
+## PLATO Room
 
-## Development
+Tiles are stored in `fishinglog-ai` room on the fleet PLATO server.
 
-```bash
-git clone https://github.com/SuperInstance/fishinglog-agent.git
-cd fishinglog-agent
-pip install -e .
-pytest
-```
+## Requirements
+
+- Python 3.10+
+- fleet-agent >= 0.2.0
+- requests >= 2.31.0
 
 ## License
 
