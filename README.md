@@ -1,8 +1,8 @@
 # Fishing Log Agent — Captain's Mate
 
-> A Python client for logging fishing sessions to a PLATO server and querying
-> them back by species, recency, or location, with a simple natural-language
-> question interface. Requires a live PLATO server — see "Requirements" below.
+A Python client for logging fishing sessions to a PLATO server and querying
+them back by species, recency, or location, with a simple natural-language
+question interface. Requires a live PLATO server — see "Requirements" below.
 
 ## Installation
 
@@ -45,8 +45,9 @@ print(answer)
 - **Natural-language Q&A** — `query_natural_language()` matches known species
   and time-range keywords (e.g. "yesterday", "last week") and summarizes the
   matching sessions; it does not do general-purpose language understanding
-- **Distance filtering** — approximate haversine radius search around a
-  lat/lon
+- **Distance filtering** — when latitude and longitude are supplied, tiles are
+  filtered by a planar distance approximation (flat-earth, ~111 km per degree
+  latitude and ~85 km per degree longitude) against a `radius_km` threshold
 
 ## PLATO Room
 
