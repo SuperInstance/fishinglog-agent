@@ -54,6 +54,12 @@ print(answer)
 Tiles are stored in the `fishinglog-ai` room on a PLATO server you run or
 point this client at (`plato_url`, default `http://localhost:8847`).
 
+PLATO is the SuperInstance sketchbook's shared tile-server memory: a **room**
+is a named collection on the server, a **tile** is one JSON record in it.
+Sibling clients of the same protocol:
+[activeledger-agent](https://github.com/SuperInstance/activeledger-agent),
+[reallog-agent](https://github.com/SuperInstance/reallog-agent).
+
 ## Requirements
 
 - Python 3.10+
