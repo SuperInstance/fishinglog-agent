@@ -1,6 +1,8 @@
 # Fishing Log Agent — Captain's Mate
 
-> PLATO-enabled fishing log agent. Logs sessions, detects hot spots, queries history.
+> A Python client for logging fishing sessions to a PLATO server and querying
+> them back by species, recency, or location, with a simple natural-language
+> question interface. Requires a live PLATO server — see "Requirements" below.
 
 ## Installation
 
@@ -25,33 +27,38 @@ agent.log_session(
     notes="Good action on the tide change"
 )
 
-# Query recent sessions
-recent = agent.get_recent_sessions(limit=10)
+# Query sessions by species, recency, or location
+recent = agent.query(species="tuna", days_back=7)
 for session in recent:
-    print(f"{session['species']}: {session['catch_count']} at {session['latitude']}N")
+    content = session["content"]
+    print(f"{content['species']}: {content['catch_count']} at {content['latitude']}N")
 
-# Detect hot spots using H1 emergence detection
-hot_spots = agent.detect_hot_spots(species="tuna")
-for spot in hot_spots:
-    print(f"Hot spot at {spot['lat']}, {spot['lon']} (score: {spot['score']})")
+# Ask a natural-language question (keyword matching + summarization, not NLP)
+answer = agent.query_natural_language("where were tuna last week?")
+print(answer)
 ```
 
 ## Features
 
-- **PLATO integration** — sessions stored as tiles in `fishinglog-ai` room
-- **H1 emergence detection** — fleet_math EmergenceDetector finds hot spots
-- **Query by species/location/time** — flexible historical queries
-- **Voice-ready** — compatible with PLATO Voice interface
+- **PLATO integration** — sessions stored as tiles in the `fishinglog-ai` room
+- **Query by species/location/time** — filter past sessions by any combination
+- **Natural-language Q&A** — `query_natural_language()` matches known species
+  and time-range keywords (e.g. "yesterday", "last week") and summarizes the
+  matching sessions; it does not do general-purpose language understanding
+- **Distance filtering** — approximate haversine radius search around a
+  lat/lon
 
 ## PLATO Room
 
-Tiles are stored in `fishinglog-ai` room on the fleet PLATO server.
+Tiles are stored in the `fishinglog-ai` room on a PLATO server you run or
+point this client at (`plato_url`, default `http://localhost:8847`).
 
 ## Requirements
 
 - Python 3.10+
-- fleet-agent >= 0.2.0
 - requests >= 2.31.0
+- A reachable PLATO server — this package is a client only; it does not
+  ship or run PLATO itself
 
 ## License
 

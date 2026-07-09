@@ -25,7 +25,6 @@ classifiers = [
 
 dependencies = [
     "requests>=2.31.0",
-    "fleet-agent>=0.2.0",
 ]
 
 [project.optional-dependencies]
